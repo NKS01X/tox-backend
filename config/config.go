@@ -42,7 +42,7 @@ func InitPostgres() {
 		DB, err = gorm.Open(postgres.Open(dsn), &gorm.Config{})
 		if err == nil {
 			log.Println("✅ Connected to PostgreSQL (Supabase)")
-			DB.AutoMigrate(&models.JobResult{}, &models.Todo{}, &models.User{})
+			DB.AutoMigrate(&models.Prediction{}, &models.User{})
 			return
 		}
 		log.Printf("⏳ Waiting for PostgreSQL (%d/10)...", i+1)

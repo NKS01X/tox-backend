@@ -9,6 +9,7 @@ import (
 
 	"hackathon-backend-go/config"
 	"hackathon-backend-go/handlers"
+	"hackathon-backend-go/middleware"
 	"hackathon-backend-go/worker"
 )
 
@@ -34,17 +35,14 @@ func main() {
 		auth.GET("/oauth/:provider", handlers.OAuthRedirect)
 	}
 
-	// ── V1 API (Protected Routes can use middleware.AuthMiddleware()) ──
+	// ── V1 API (Protected) ───────────────────────────────────
 	v1 := r.Group("/v1/api")
-	// Example: v1.Use(middleware.AuthMiddleware())
+	v1.Use(middleware.AuthMiddleware())
 	{
-		// ── Supabase Todos Endpoint ──────────────────────────────
-		v1.GET("/todos", handlers.GetTodos)
-
-		// ── Job Ingestion Endpoint ───────────────────────────────
+		// Job Ingestion: POST /v1/api/jobs  { "smiles": "CC(=O)..." }
 		v1.POST("/jobs", handlers.IngestJob)
 
-		// ── Job WebSocket Endpoint ───────────────────────────────
+		// Job Status via WebSocket: GET /v1/api/jobs/ws/:job_id
 		v1.GET("/jobs/ws/:job_id", handlers.JobWebSocket)
 	}
 
