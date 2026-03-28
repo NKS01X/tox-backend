@@ -7,22 +7,27 @@ A high-performance, event-driven toxicity prediction API built with **Go (Gin)**
 ## 🏗️ Architecture Flow
 
 ```
-Client ──POST /jobs──▶ Go Backend ──XAdd──▶ Redis Stream (llm_task_queue)
-                                                      │
-                                           Python Worker (xreadgroup)
-                                                      │
-                                              Inference (ML Model)
-                                                      │
-                                           PostgreSQL (predictions table)
-                                                      │
-                                           Redis Pub/Sub (job_completed_events)
-                                                      │
-Client ◀──WebSocket Frame── Go Worker (Subscribe) ◀──┘
+Client ──POST /jobs──▶ Go Backend ─── DB cache check ───────────────────────▶ 200 OK (cached result)
+                            │              (smiles already completed?)           ↑
+                            │ No cache hit                                       │
+                            ▼                                               PostgreSQL
+                       Redis Stream (llm_task_queue)                            │
+                            │                                                   │
+                   Python Worker (xreadgroup)                                   │
+                            │                                                   │
+                    Inference (ML Model)                                        │
+                            │                                                   │
+                   PostgreSQL (predictions table) ─────────────────────────────┘
+                            │
+                   Redis Pub/Sub (job_completed_events)
+                            │
+Client ◀──WebSocket Frame── Go Worker (Subscribe)
 ```
 
-1. **Ingest**: Client POSTs a SMILES string; server saves a `queued` row in PostgreSQL and pushes to a Redis Stream, returning a `job_id` instantly.
-2. **Worker**: Python worker reads from the stream, runs ML inference, updates PostgreSQL to `completed`, and publishes the `job_id` to a Redis Pub/Sub channel.
-3. **Delivery**: The Go Pub/Sub listener receives the event, fetches the completed prediction, and pushes the result to the waiting WebSocket client before closing the connection.
+1. **Cache check**: Before enqueuing, the Go handler queries PostgreSQL for an existing `completed` result for the same SMILES. If found, returns it immediately (`200 OK`) — no model inference runs.
+2. **Ingest** *(cache miss)*: Saves a `queued` row in PostgreSQL and pushes to a Redis Stream, returning a `job_id` (`202 Accepted`).
+3. **Worker**: Python worker reads from the stream, runs ML inference, updates PostgreSQL to `completed`, and publishes the `job_id` to a Redis Pub/Sub channel.
+4. **Delivery**: The Go Pub/Sub listener receives the event, fetches the completed prediction, and pushes the result to the waiting WebSocket client before closing the connection.
 
 ---
 
@@ -71,8 +76,19 @@ go run main.go
 
 # Python ML worker (separate terminal)
 cd python-worker
+python -m venv venv
+source venv/bin/activate
 pip install -r requirements.txt
 python worker.py
+```
+
+### Running Tests
+
+The Go backend includes automated tests for all handlers (auth, health, jobs caching). These tests use an isolated in-memory SQLite database and Miniredis to run without external dependencies. 
+
+```bash
+# Run all Go tests
+go test ./tests/... -v
 ```
 
 > The `docker-compose.yml` / `Dockerfile` are for production deployments or running local Postgres/Redis instances.
@@ -222,7 +238,19 @@ Content-Type: application/json
 }
 ```
 
-**Response `202 Accepted`**
+**Response `200 OK`** — *cache hit* (SMILES was already processed; full result returned immediately, no WebSocket needed)
+```json
+{
+  "job_id": "9fae1055-7507-44ed-858c-1fe12c0d922c",
+  "status": "completed",
+  "smiles_input": "CC(=O)Oc1ccccc1C(=O)O",
+  "tox_score": 0.1523,
+  "tox_class": "Non-toxic",
+  "llm_explanation": "..."
+}
+```
+
+**Response `202 Accepted`** — *cache miss* (new job queued; connect via WebSocket to receive the result)
 ```json
 {
   "job_id": "9fae1055-7507-44ed-858c-1fe12c0d922c",
@@ -286,10 +314,11 @@ Upgrades the HTTP connection to a WebSocket. The connection stays open until the
 The `python-worker/worker.py` service runs independently and:
 
 1. Joins the `python-llm-workers` consumer group on the `llm_task_queue` Redis Stream.
-2. For each message, updates the prediction to `processing`, runs inference, updates to `completed`, and publishes to `job_completed_events`.
+2. For each message, updates the prediction to `processing`, runs the real **RDKit + LightGBM/XGBoost ensemble** model, updates to `completed`, and publishes to `job_completed_events`.
 3. Acknowledges the stream message to prevent re-delivery.
+4. Falls back to mock inference automatically if `toxicity_model.pkl` is not present (run `python train.py --csv /path/to/tox21.csv` to generate it).
 
-Swap out `predict_toxicity_mock()` in `worker.py` with a real RDKit / Transformers pipeline when ready.
+> **Cache note:** The Python worker only receives jobs that were a **cache miss** in the Go handler. Duplicate SMILES are short-circuited before they ever reach the stream.
 
 ---
 

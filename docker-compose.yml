@@ -24,9 +24,22 @@ services:
     restart: unless-stopped
     ports:
       - "8080:8080"
+    env_file:
+      - .env
     environment:
-      DATABASE_URL: "postgresql://postgres.znnerqhgwirwrhjipdyd:[YOUR-PASSWORD]@aws-0-us-east-1.pooler.supabase.com:6543/postgres"
       REDIS_ADDR: "redis:6379"
+    depends_on:
+      redis:
+        condition: service_healthy
+
+  # ── Python ML Worker ───────────────────────────────────────
+  python-worker:
+    build:
+      context: ./python-worker
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    env_file:
+      - .env
     depends_on:
       redis:
         condition: service_healthy

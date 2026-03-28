@@ -22,6 +22,19 @@ func IngestJob(c *gin.Context) {
 		return
 	}
 
+	// ── Cache check ─────────────────────────────────────────────────────────
+	// If this SMILES has already been processed successfully, return the
+	// cached result immediately without re-running the model.
+	var cached models.Prediction
+	if err := config.DB.
+		Where("smiles_input = ? AND status = ?", req.Smiles, "completed").
+		Order("created_at DESC").
+		First(&cached).Error; err == nil {
+		log.Printf("✅ Cache hit for SMILES %.30s — returning existing result", req.Smiles)
+		c.JSON(http.StatusOK, buildWSPayload(&cached))
+		return
+	}
+
 	jobID := uuid.New().String()
 
 	// Persist the job row immediately so status is queryable from the start
