@@ -2,26 +2,53 @@
 
 A high-performance, event-driven toxicity prediction API built with **Go (Gin)**, **PostgreSQL (Supabase)**, **Redis (Upstash)**, and a **Python ML worker**. Accepts a SMILES string, predicts toxicity via an ML model, and streams the result back to the client in real-time over WebSockets.
 
+![Tox-Detector Overview](./final.png)
+
 ---
 
 ## 🏗️ Architecture Flow
 
-```
-Client ──POST /jobs──▶ Go Backend ─── DB cache check ───────────────────────▶ 200 OK (cached result)
-                            │              (smiles already completed?)           ↑
-                            │ No cache hit                                       │
-                            ▼                                               PostgreSQL
-                       Redis Stream (llm_task_queue)                            │
-                            │                                                   │
-                   Python Worker (xreadgroup)                                   │
-                            │                                                   │
-                    Inference (ML Model)                                        │
-                            │                                                   │
-                   PostgreSQL (predictions table) ─────────────────────────────┘
-                            │
-                   Redis Pub/Sub (job_completed_events)
-                            │
-Client ◀──WebSocket Frame── Go Worker (Subscribe)
+```mermaid
+flowchart TD
+    subgraph Client ["Client Side"]
+        Frontend["Frontend"]
+    end
+
+    subgraph Core ["Core Services"]
+        Gateway["API Gateway - Go"]
+    end
+
+    subgraph Broker ["Message Broker & State"]
+        Redis["Redis - Task Queue & Pub/Sub"]
+        DB["Database / Persistent Cache<br>(Postgresql)"]
+    end
+
+    subgraph LLM ["LLM microservice"]
+        subgraph Pool ["Worker Pool"]
+            W1["LLM Worker 1"]
+            W2["LLM Worker 2"]
+            WN["LLM Worker N"]
+        end
+    end
+
+    Frontend -->|"1. POST /v1/api/jobs"| Gateway
+    Gateway -->|"2. Push task payload"| Redis
+    Gateway -->|"3. Return HTTP 202 (job_id)"| Frontend
+    Frontend -->|"4. Connect WebSocket/SSE (job_id)"| Gateway
+    
+    Redis -->|"5. Pull task directly (No Gateway needed)"| W1
+    W1 -->|"6. Process task & Save Result"| DB
+    W1 -->|"7. Publish 'Job Done' event"| Redis
+    
+    Redis -->|"8. Trigger event listener"| Gateway
+    Gateway -->|"9. Push final data via WS/SSE"| Frontend
+    
+    Redis -.-> W2
+    Redis -.-> WN
+    W2 -.-> DB
+    WN -.-> DB
+    W2 -.-> Redis
+    WN -.-> Redis
 ```
 
 1. **Cache check**: Before enqueuing, the Go handler queries PostgreSQL for an existing `completed` result for the same SMILES. If found, returns it immediately (`200 OK`) — no model inference runs.
