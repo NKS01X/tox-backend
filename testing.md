@@ -62,7 +62,7 @@ curl -X POST http://localhost:8080/v1/api/jobs \
 ### B. Wait for the real-time result via WebSocket
 ```bash
 # Replace <JOB_ID> with the id from Step A
-wscat -c ws://localhost:8080/v1/api/jobs/ws/<JOB_ID>
+wscat -c ws://localhost:8080/v1/api/jobs/ws/<JOB_ID> -H "Authorization: Bearer $TOKEN"
 ```
 
 **What happens:**

@@ -97,11 +97,11 @@ go test ./tests/... -v
 
 ## 🔒 Authentication
 
-All `/v1/api/*` endpoints require a valid **Bearer JWT** in the `Authorization` header. The middleware accepts tokens issued by both this backend's `/auth/login` and Supabase Auth (HS256).
+All `/v1/api/*` endpoints require a valid **Bearer JWT**. You can provide this in one of two ways:
+1. `Authorization: Bearer <token>` (Header)
+2. `?token=<token>` (Query parameter — useful for WebSockets)
 
-```
-Authorization: Bearer <token>
-```
+The middleware accepts tokens issued by both this backend's `/auth/login` and Supabase Auth (HS256).
 
 ---
 
@@ -277,8 +277,7 @@ Content-Type: application/json
 ### Job Result — WebSocket *(protected)*
 
 ```
-GET /v1/api/jobs/ws/:job_id
-Authorization: Bearer <token>
+GET /v1/api/jobs/ws/:job_id?token=<token>
 Upgrade: websocket
 ```
 

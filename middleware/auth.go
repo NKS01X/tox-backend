@@ -19,20 +19,27 @@ import (
 // Both use HS256 signing, so the same parsing logic applies.
 func AuthMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
+		var rawToken string
+
 		authHeader := c.GetHeader("Authorization")
-		if authHeader == "" {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": "Authorization header is required"})
-			c.Abort()
-			return
+		if authHeader != "" {
+			parts := strings.Split(authHeader, " ")
+			if len(parts) != 2 || parts[0] != "Bearer" {
+				c.JSON(http.StatusUnauthorized, gin.H{"error": "Authorization header must be formatted as: Bearer <token>"})
+				c.Abort()
+				return
+			}
+			rawToken = parts[1]
+		} else {
+			// Fallback to query parameter (often needed for WebSockets)
+			rawToken = c.Query("token")
 		}
 
-		parts := strings.Split(authHeader, " ")
-		if len(parts) != 2 || parts[0] != "Bearer" {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": "Authorization header must be formatted as: Bearer <token>"})
+		if rawToken == "" {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "Authorization header or ?token query parameter is required"})
 			c.Abort()
 			return
 		}
-		rawToken := parts[1]
 
 		// Collect candidate secrets (non-empty only)
 		var secrets []string
