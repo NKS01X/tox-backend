@@ -27,7 +27,7 @@ CONSUMER_ID  = f"worker-{os.getpid()}"
 PUBSUB_CHAN  = "job_completed_events"
 
 # ── Model pipeline ─────────────────────────────────────────────────────────
-_PIPELINE_PATH = Path(__file__).parent / "toxicity_model.pkl"
+_PIPELINE_PATH = Path(__file__).parent / "final_toxmodel.pkl"
 _pipeline      = None  
 
 def _load_model() -> object | None:
