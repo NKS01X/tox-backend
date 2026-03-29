@@ -134,196 +134,214 @@ The middleware accepts tokens issued by both this backend's `/auth/login` and Su
 
 ## 🔌 API Endpoints
 
-### Health Check
+### 1. Health Check
+Checks if the API, PostgreSQL, and Redis are online.
 
-```
-GET /health
-```
+**Endpoint:** `GET /health`
 
-**Response `200 OK`**
-```json
-{
-  "status": "healthy",
-  "postgres": "ok",
-  "redis": "ok"
-}
-```
+**Expected:**
+- **Headers:** None
+- **Payload:** None
 
-**Response `503 Service Unavailable`** (if a dependency is down)
-```json
-{
-  "status": "unhealthy",
-  "postgres": "dial tcp: connection refused"
-}
-```
-
----
-
-### Auth — Sign Up
-
-```
-POST /auth/signup
-Content-Type: application/json
-```
-
-**Request**
-```json
-{
-  "email": "alice@example.com",
-  "password": "securepassword"
-}
-```
-
-**Response `201 Created`**
-```json
-{
-  "message": "User registered successfully",
-  "user_id": 1
-}
-```
-
-**Response `409 Conflict`** (email already exists)
-```json
-{
-  "error": "Email already exists"
-}
-```
+**Returned:**
+- **Success (`200 OK`):**
+  ```json
+  {
+    "status": "healthy",
+    "postgres": "ok",
+    "redis": "ok"
+  }
+  ```
+- **Error (`503 Service Unavailable`):**
+  ```json
+  {
+    "status": "unhealthy",
+    "postgres": "dial tcp: connection refused"
+  }
+  ```
 
 ---
 
-### Auth — Login
+### 2. Auth — Sign Up
+Registers a new user account.
 
-```
-POST /auth/login
-Content-Type: application/json
-```
+**Endpoint:** `POST /auth/signup`
 
-**Request**
-```json
-{
-  "email": "alice@example.com",
-  "password": "securepassword"
-}
-```
+**Expected:**
+- **Headers:** `Content-Type: application/json`
+- **Payload:**
+  ```json
+  {
+    "email": "alice@example.com",
+    "password": "securepassword"
+  }
+  ```
 
-**Response `200 OK`**
-```json
-{
-  "message": "Login successful",
-  "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
-}
-```
-
-**Response `401 Unauthorized`**
-```json
-{
-  "error": "Invalid email or password"
-}
-```
-
----
-
-### Auth — Logout
-
-```
-POST /auth/logout
-```
-
-**Response `200 OK`**
-```json
-{
-  "message": "Logged out successfully. Please discard the token on the client."
-}
-```
+**Returned:**
+- **Success (`201 Created`):**
+  ```json
+  {
+    "message": "User registered successfully",
+    "user_id": 1
+  }
+  ```
+- **Error (`409 Conflict` - Email in use):**
+  ```json
+  {
+    "error": "Email already exists"
+  }
+  ```
+- **Error (`400 Bad Request` - Validation failed):**
+  ```json
+  {
+    "error": "Key: 'email' Error:Field validation for 'email' failed..."
+  }
+  ```
 
 ---
 
-### Auth — OAuth Redirect
+### 3. Auth — Login
+Authenticates a user and issues a JWT token.
 
-```
-GET /auth/oauth/:provider?redirect_to=<url>
-```
+**Endpoint:** `POST /auth/login`
 
-Redirects to Supabase's OAuth authorization page for the given provider (e.g. `google`, `github`). The frontend receives the callback; Supabase-issued HS256 tokens are natively accepted by this backend's `AuthMiddleware`.
+**Expected:**
+- **Headers:** `Content-Type: application/json`
+- **Payload:**
+  ```json
+  {
+    "email": "alice@example.com",
+    "password": "securepassword"
+  }
+  ```
 
-**Response**: `307 Temporary Redirect` → `https://<supabase-url>/auth/v1/authorize?provider=google`
-
----
-
-### Ingest Job *(protected)*
-
-```
-POST /v1/api/jobs
-Authorization: Bearer <token>
-Content-Type: application/json
-```
-
-**Request**
-```json
-{
-  "smiles": "CC(=O)Oc1ccccc1C(=O)O"
-}
-```
-
-**Response `200 OK`** — *cache hit* (SMILES was already processed; full result returned immediately, no WebSocket needed)
-```json
-{
-  "job_id": "9fae1055-7507-44ed-858c-1fe12c0d922c",
-  "status": "completed",
-  "smiles_input": "CC(=O)Oc1ccccc1C(=O)O",
-  "tox_score": 0.1523,
-  "tox_class": "Non-toxic",
-  "llm_explanation": "..."
-}
-```
-
-**Response `202 Accepted`** — *cache miss* (new job queued; connect via WebSocket to receive the result)
-```json
-{
-  "job_id": "9fae1055-7507-44ed-858c-1fe12c0d922c",
-  "status": "queued"
-}
-```
-
-**Response `400 Bad Request`** (missing `smiles`)
-```json
-{
-  "error": "Invalid request payload: Key: 'smiles' Error:Field validation for 'smiles' failed on the 'required' tag"
-}
-```
-
-**Response `500 Internal Server Error`** (Redis/DB failure)
-```json
-{
-  "error": "Failed to enqueue job"
-}
-```
+**Returned:**
+- **Success (`200 OK`):**
+  ```json
+  {
+    "message": "Login successful",
+    "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+  }
+  ```
+- **Error (`401 Unauthorized`):**
+  ```json
+  {
+    "error": "Invalid email or password"
+  }
+  ```
 
 ---
 
-### Job Result — WebSocket *(protected)*
+### 4. Auth — Logout
+Invalidates the current session on the client side.
 
-```
-GET /v1/api/jobs/ws/:job_id?token=<token>
-Upgrade: websocket
-```
+**Endpoint:** `POST /auth/logout`
 
-Upgrades the HTTP connection to a WebSocket. The connection stays open until the ML worker completes the job, at which point the server pushes a single JSON frame and closes the connection.
+**Expected:**
+- **Headers:** None
+- **Payload:** None
 
-> **Fast-path**: If the job is already `completed` in the DB at connection time, the server pushes the result immediately without waiting.
+**Returned:**
+- **Success (`200 OK`):**
+  ```json
+  {
+    "message": "Logged out successfully. Please discard the token on the client."
+  }
+  ```
 
-**WebSocket frame (pushed by server on completion)**
-```json
-{
-  "job_id": "9fae1055-7507-44ed-858c-1fe12c0d922c",
-  "status": "completed",
-  "smiles_input": "CC(=O)Oc1ccccc1C(=O)O",
-  "tox_score": 0.1523,
-  "tox_class": "Non-toxic",
-  "llm_explanation": "The compound CC(=O)Oc1ccccc1... shows very low predicted toxicity (score 0.1523)."
-}
-```
+---
 
+### 5. Auth — OAuth Redirect
+Redirects the client to Supabase's OAuth authorization page.
+
+**Endpoint:** `GET /auth/oauth/:provider`
+
+**Expected:**
+- **URL Parameters:** `:provider` (e.g., `google`, `github`)
+- **Query Parameters:** `redirect_to=<url>` (Optional)
+- **Headers:** None
+- **Payload:** None
+
+**Returned:**
+- **Success (`307 Temporary Redirect`):** Redirects the user's browser to `https://<supabase-url>/auth/v1/authorize?provider=...`
+
+---
+
+### 6. Ingest Job *(Protected)*
+Submits a SMILES string for toxicity prediction.
+
+**Endpoint:** `POST /v1/api/jobs`
+
+**Expected:**
+- **Headers:** 
+  - `Content-Type: application/json`
+  - `Authorization: Bearer <token>`
+- **Payload:**
+  ```json
+  {
+    "smiles": "CC(=O)Oc1ccccc1C(=O)O"
+  }
+  ```
+
+**Returned:**
+- **Success - Cache Hit (`200 OK`):** (Result is ready instantly)
+  ```json
+  {
+    "job_id": "9fae1055-7507-44ed-858c-1fe12c0d922c",
+    "status": "completed",
+    "smiles_input": "CC(=O)Oc1ccccc1C(=O)O",
+    "tox_score": 0.1523,
+    "tox_class": "Non-toxic",
+    "llm_explanation": "..."
+  }
+  ```
+- **Success - Queued (`202 Accepted`):** (Needs processing, connect via WS)
+  ```json
+  {
+    "job_id": "9fae1055-7507-44ed-858c-1fe12c0d922c",
+    "status": "queued"
+  }
+  ```
+- **Error - Missing Payload (`400 Bad Request`):**
+  ```json
+  {
+    "error": "Invalid request payload: Key: 'smiles' Error:Field validation..."
+  }
+  ```
+- **Error - Server Issue (`500 Internal Server Error`):**
+  ```json
+  {
+    "error": "Failed to enqueue job"
+  }
+  ```
+
+---
+
+### 7. Job Result — WebSocket *(Protected)*
+Streams the prediction result back as soon as the ML worker finishes.
+
+**Endpoint:** `GET /v1/api/jobs/ws/:job_id`
+
+**Expected:**
+- **URL Parameters:** `:job_id` (The UUID returned from the Ingest Job endpoint)
+- **Query Parameters:** `token=<jwt_token>` (Alternative to Authorization header for WebSockets)
+- **Headers:** `Upgrade: websocket`
+- **Payload:** None
+
+**Returned:**
+- **WebSocket Frame (JSON):** (Pushed when the job completes, after which the connection closes)
+  ```json
+  {
+    "job_id": "9fae1055-7507-44ed-858c-1fe12c0d922c",
+    "status": "completed",
+    "smiles_input": "CC(=O)Oc1ccccc1C(=O)O",
+    "tox_score": 0.1523,
+    "tox_class": "Non-toxic",
+    "llm_explanation": "The compound CC(=O)Oc1ccccc1... shows very low predicted toxicity (score 0.1523)."
+  }
+  ```
+
+**Returned Payload Breakdown:**
 | Field | Type | Description |
 |---|---|---|
 | `job_id` | string (UUID) | Unique job identifier |
