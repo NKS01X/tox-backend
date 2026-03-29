@@ -153,4 +153,17 @@ def predict_toxicity(smiles: str, pipeline: dict) -> dict:
         "tox_score": round(float(probs[0]), 4),
         "tox_class": tox_class,
         "llm_explanation": explanation,
+        "extra_data": {
+            "properties": {
+                "mol_wt": round(float(mol_wt), 2),
+                "logp": round(float(logp), 2),
+                "h_donors": int(h_donors),
+                "qed_score": round(float(qed_score), 2)
+            },
+            "probabilities": {
+                "high": round(float(probs[0]), 4),
+                "moderate": round(float(probs[1]), 4),
+                "non_toxic": round(float(probs[2]), 4)
+            }
+        }
     }

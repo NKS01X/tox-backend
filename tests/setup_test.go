@@ -55,6 +55,7 @@ func setupTestEnv() (*gin.Engine, *miniredis.Miniredis, func()) {
 			tox_score REAL,
 			tox_class TEXT,
 			llm_explanation TEXT,
+			extra_data JSON,
 			created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 		);
 	`).Error

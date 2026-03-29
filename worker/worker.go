@@ -46,6 +46,7 @@ func ListenForCompletions() {
 				"tox_score":       prediction.ToxScore,
 				"tox_class":       prediction.ToxClass,
 				"llm_explanation": prediction.LLMExplanation,
+				"extra_data":      prediction.ExtraData,
 			}
 			_ = conn.WriteJSON(payload)
 			conn.Close()

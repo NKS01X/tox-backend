@@ -292,7 +292,20 @@ Submits a SMILES string for toxicity prediction.
     "smiles_input": "CC(=O)Oc1ccccc1C(=O)O",
     "tox_score": 0.1523,
     "tox_class": "Non-toxic",
-    "llm_explanation": "..."
+    "llm_explanation": "...",
+    "extra_data": {
+      "properties": {
+        "mol_wt": 180.16,
+        "logp": 1.31,
+        "h_donors": 1,
+        "qed_score": 0.53
+      },
+      "probabilities": {
+        "high": 0.0512,
+        "moderate": 0.0988,
+        "non_toxic": 0.8500
+      }
+    }
   }
   ```
 - **Success - Queued (`202 Accepted`):** (Needs processing, connect via WS)
@@ -337,7 +350,20 @@ Streams the prediction result back as soon as the ML worker finishes.
     "smiles_input": "CC(=O)Oc1ccccc1C(=O)O",
     "tox_score": 0.1523,
     "tox_class": "Non-toxic",
-    "llm_explanation": "The compound CC(=O)Oc1ccccc1... shows very low predicted toxicity (score 0.1523)."
+    "llm_explanation": "The compound CC(=O)Oc1ccccc1... shows very low predicted toxicity (score 0.1523).",
+    "extra_data": {
+      "properties": {
+        "mol_wt": 180.16,
+        "logp": 1.31,
+        "h_donors": 1,
+        "qed_score": 0.53
+      },
+      "probabilities": {
+        "high": 0.0512,
+        "moderate": 0.0988,
+        "non_toxic": 0.8500
+      }
+    }
   }
   ```
 
@@ -350,6 +376,7 @@ Streams the prediction result back as soon as the ML worker finishes.
 | `tox_score` | float | Toxicity score from 0.0 (safe) to 1.0 (highly toxic) |
 | `tox_class` | string | `Non-toxic` \| `Low` \| `Moderate` \| `High` |
 | `llm_explanation` | string | Human-readable explanation of the prediction |
+| `extra_data` | object | JSON object containing `properties` (mol_wt, logp, etc.) and `probabilities` |
 
 ---
 

@@ -7,6 +7,7 @@ import time
 import random
 import logging
 import psycopg2
+import json
 from pathlib import Path
 from dotenv import load_dotenv
 from redis import Redis
@@ -63,7 +64,7 @@ def make_redis() -> Redis:
 def get_conn():
     return psycopg2.connect(DATABASE_URL)
 
-def update_prediction(job_id: str, tox_score: float, tox_class: str, explanation: str):
+def update_prediction(job_id: str, tox_score: float, tox_class: str, explanation: str, extra_data: dict):
     with get_conn() as conn:
         with conn.cursor() as cur:
             cur.execute(
@@ -72,10 +73,11 @@ def update_prediction(job_id: str, tox_score: float, tox_class: str, explanation
                 SET status          = 'completed',
                     tox_score       = %s,
                     tox_class       = %s,
-                    llm_explanation = %s
+                    llm_explanation = %s,
+                    extra_data      = %s
                 WHERE id = %s
                 """,
-                (tox_score, tox_class, explanation, job_id),
+                (tox_score, tox_class, explanation, json.dumps(extra_data), job_id),
             )
         conn.commit()
     log.info(f"✅ Updated job {job_id} in DB")
@@ -106,7 +108,15 @@ def _predict_mock(smiles: str) -> dict:
     else:
         cls = "High"
         expl = f"[MOCK] {smiles[:20]}… high toxicity (score {score}). Hazardous."
-    return {"tox_score": score, "tox_class": cls, "llm_explanation": expl}
+    return {
+        "tox_score": score, 
+        "tox_class": cls, 
+        "llm_explanation": expl,
+        "extra_data": {
+            "properties": {"mol_wt": 300.0, "logp": 1.5, "h_donors": 2, "qed_score": 0.8},
+            "probabilities": {"high": score, "moderate": (1 - score)/2, "non_toxic": (1 - score)/2}
+        }
+    }
 
 def predict_toxicity(smiles: str) -> dict:
     if _pipeline is not None:
@@ -165,7 +175,7 @@ def run():
 
                     # 3. Update DB to completed
                     update_prediction(
-                        job_id, result["tox_score"], result["tox_class"], result["llm_explanation"]
+                        job_id, result["tox_score"], result["tox_class"], result["llm_explanation"], result.get("extra_data", {})
                     )
 
                     # 4. Notify WebSocket that the job succeeded

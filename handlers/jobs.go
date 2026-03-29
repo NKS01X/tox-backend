@@ -123,5 +123,6 @@ func buildWSPayload(p *models.Prediction) gin.H {
 		"tox_score":       p.ToxScore,
 		"tox_class":       p.ToxClass,
 		"llm_explanation": p.LLMExplanation,
+		"extra_data":      p.ExtraData,
 	}
 }
