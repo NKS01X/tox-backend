@@ -51,7 +51,7 @@ func ListenForCompletions() {
 			conn.Close()
 			log.Printf("✅ Worker: pushed result for job %s to WebSocket client", jobID)
 		} else {
-			log.Printf(msg.Payload)
+			log.Println(msg.Payload)
 			log.Printf("ℹ️  Worker: job %s completed but no active WS client found (client may have disconnected)", jobID)
 		}
 	}

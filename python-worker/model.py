@@ -13,6 +13,9 @@ import pickle
 import logging
 import numpy as np
 import pandas as pd
+from rdkit import Chem
+from rdkit.Chem import Descriptors
+from rdkit.Chem.rdFingerprintGenerator import GetMorganGenerator
 
 log = logging.getLogger(__name__)
 
@@ -26,6 +29,8 @@ MORGAN_RADIUS = 2
 MORGAN_FP_SIZE = 2048
 TOX_THRESHOLD_HIGH = 0.7
 TOX_THRESHOLD_MOD  = 0.3
+# Pre-built generator (mirrors notebook's module-level `morgan_gen`)
+_morgan_gen = GetMorganGenerator(radius=MORGAN_RADIUS, fpSize=MORGAN_FP_SIZE)
 
 DESCRIPTOR_NAMES = [
     "MolWt", "Mol_Refract", "TPSA", "NumHAcceptors",
@@ -100,39 +105,33 @@ def smiles_to_features(smiles: str) -> np.ndarray | None:
     Returns None if the SMILES is invalid.
     """
     try:
-        from rdkit import Chem
-        from rdkit.Chem import Descriptors
-        from rdkit.Chem.rdFingerprintGenerator import GetMorganGenerator
-
         mol = Chem.MolFromSmiles(smiles)
         if mol is None:
             return None
-
-        morgan_gen = GetMorganGenerator(radius=MORGAN_RADIUS, fpSize=MORGAN_FP_SIZE)
 
         mw   = Descriptors.MolWt(mol)
         tpsa = Descriptors.TPSA(mol)
         logp = Descriptors.MolLogP(mol)
         bbb  = 1 if (tpsa < 90 and 1 < logp < 4 and mw < 450) else 0
 
-        continuous = [
-            mw,
-            Descriptors.MolMR(mol),
-            tpsa,
-            Descriptors.NumHAcceptors(mol),
-            Descriptors.NumHDonors(mol),
-            logp,
-            _compute_esol(mol),
-            _lipinski(mol),
-            _ghose(mol),
-            _veber(mol),
-            _egan(mol),
-            _muegge(mol),
-            bbb,
-        ]
+        features = []
+        features.append(mw)
+        features.append(Descriptors.MolMR(mol))
+        features.append(tpsa)
+        features.append(Descriptors.NumHAcceptors(mol))
+        features.append(Descriptors.NumHDonors(mol))
+        features.append(logp)
+        features.append(_compute_esol(mol))
+        features.append(_lipinski(mol))
+        features.append(_ghose(mol))
+        features.append(_veber(mol))
+        features.append(_egan(mol))
+        features.append(_muegge(mol))
+        features.append(bbb)
 
-        fp = np.array(morgan_gen.GetFingerprint(mol))
-        return np.concatenate([continuous, fp])
+        fp = np.array(_morgan_gen.GetFingerprint(mol))
+        features.extend(fp)
+        return np.array(features)
 
     except Exception as exc:
         log.warning(f"Feature extraction failed for '{smiles}': {exc}")

@@ -4,6 +4,7 @@ import (
 	"log"
 	"os"
 
+	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 	"github.com/joho/godotenv"
 
@@ -22,6 +23,15 @@ func main() {
 	go worker.ListenForCompletions()
 
 	r := gin.Default()
+
+	// ── CORS Middleware ──────────────────────────────────────
+	r.Use(cors.New(cors.Config{
+		AllowOriginFunc:  func(origin string) bool { return true }, // Allow all origins dynamically
+		AllowMethods:     []string{"GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"},
+		AllowHeaders:     []string{"Origin", "Content-Length", "Content-Type", "Authorization", "Accept", "X-Requested-With"},
+		ExposeHeaders:    []string{"Content-Length"},
+		AllowCredentials: true,
+	}))
 
 	// ── Health endpoint ──────────────────────────────────────
 	r.GET("/health", handlers.HealthCheck)
